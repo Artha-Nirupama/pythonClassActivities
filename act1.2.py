@@ -1,6 +1,5 @@
 import time
 import sys
-
 sys.stdout.reconfigure(encoding='utf-8')
 
 print("****⏳ The Count Down Timer ⏳****")
