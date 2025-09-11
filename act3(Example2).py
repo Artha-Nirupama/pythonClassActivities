@@ -1,5 +1,17 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import mysql.connector
+
+# ---------------------------
+# Database Connection
+# ---------------------------
+def connect_db():
+    return mysql.connector.connect(
+        host="localhost",     # Change if needed
+        user="root",          # Your MySQL username
+        password="artha20@",  # Your MySQL password
+        database="studentdb"
+    )
 
 # ---------------------------
 # Functions for Button Actions
@@ -8,34 +20,75 @@ def insert_record():
     if not (entry_id.get() and entry_name.get() and entry_address.get() and entry_phone.get() and entry_grade.get()):
         messagebox.showwarning("Input Error", "Please fill all fields")
         return
-    tree.insert("", "end", values=(entry_id.get(), entry_name.get(), entry_address.get(), entry_phone.get(), entry_grade.get()))
-    reset_fields()
+    
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO students (student_id, name, address, phone, grade) VALUES (%s, %s, %s, %s, %s)",
+                       (entry_id.get(), entry_name.get(), entry_address.get(), entry_phone.get(), entry_grade.get()))
+        conn.commit()
+        load_records()
+        reset_fields()
+    except mysql.connector.Error as err:
+        messagebox.showerror("Database Error", str(err))
+    finally:
+        cursor.close()
+        conn.close()
 
 def update_record():
     selected = tree.selection()
     if not selected:
         messagebox.showwarning("Selection Error", "Please select a record to update")
         return
-    tree.item(selected, values=(entry_id.get(), entry_name.get(), entry_address.get(), entry_phone.get(), entry_grade.get()))
-    reset_fields()
+    
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE students SET name=%s, address=%s, phone=%s, grade=%s WHERE student_id=%s",
+                       (entry_name.get(), entry_address.get(), entry_phone.get(), entry_grade.get(), entry_id.get()))
+        conn.commit()
+        load_records()
+        reset_fields()
+    except mysql.connector.Error as err:
+        messagebox.showerror("Database Error", str(err))
+    finally:
+        cursor.close()
+        conn.close()
 
 def delete_record():
     selected = tree.selection()
     if not selected:
         messagebox.showwarning("Selection Error", "Please select a record to delete")
         return
-    tree.delete(selected)
-    reset_fields()
+
+    student_id = tree.item(selected)["values"][0]
+
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM students WHERE student_id=%s", (student_id,))
+        conn.commit()
+        load_records()
+        reset_fields()
+    except mysql.connector.Error as err:
+        messagebox.showerror("Database Error", str(err))
+    finally:
+        cursor.close()
+        conn.close()
 
 def search_record():
     query = entry_name.get().lower()
-    for child in tree.get_children():
-        values = tree.item(child)["values"]
-        if query in str(values[1]).lower():
-            tree.selection_set(child)
-            tree.focus(child)
-            return
-    messagebox.showinfo("Search Result", "No matching record found")
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM students WHERE LOWER(name) LIKE %s", ("%" + query + "%",))
+        rows = cursor.fetchall()
+        tree.delete(*tree.get_children())
+        for row in rows:
+            tree.insert("", "end", values=row)
+    finally:
+        cursor.close()
+        conn.close()
 
 def reset_fields():
     entry_id.delete(0, tk.END)
@@ -57,12 +110,23 @@ def select_record():
     entry_phone.insert(0, values[3])
     entry_grade.insert(0, values[4])
 
+def load_records():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM students")
+    rows = cursor.fetchall()
+    tree.delete(*tree.get_children())
+    for row in rows:
+        tree.insert("", "end", values=row)
+    cursor.close()
+    conn.close()
+
 # ---------------------------
 # Main Window
 # ---------------------------
 root = tk.Tk()
-root.title("Student Registration System")
-root.geometry("700x500")
+root.title("Student Registration System with MySQL")
+root.geometry("750x550")
 root.configure(bg="white")
 
 # ---------------------------
@@ -119,6 +183,9 @@ for col in columns:
     tree.column(col, width=120)
 
 tree.grid(row=6, column=0, columnspan=3, padx=10, pady=10)
+
+# Load data when app starts
+load_records()
 
 # ---------------------------
 # Run the App
